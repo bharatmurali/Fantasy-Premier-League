@@ -3,6 +3,8 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from joblib import Parallel, delayed
 import numpy as np
+from sklearn.model_selection import GridSearchCV, train_test_split
+import joblib
 
 # Function to load cleaned_merged_seasons.csv and master_team_list.csv
 def load_data(season_file='data/cleaned_merged_seasons.csv', team_file='data/master_team_list.csv'):
@@ -86,11 +88,28 @@ predictions = pd.DataFrame(results)
 X_val = validation_data.drop(columns=['total_points', 'name', 'GW', 'season_x'])
 y_val = validation_data['total_points']
 
-model = RandomForestRegressor()
-model.fit(X_val, y_val)
+# Hyperparameter tuning using GridSearchCV
+param_grid = {
+    'n_estimators': [100, 200, 500],
+    'max_depth': [None, 10, 20, 30],
+    'min_samples_split': [2, 10, 20],
+    'min_samples_leaf': [1, 5, 10],
+    'max_features': ['sqrt', 'log2', None]
+}
+
+grid_search = GridSearchCV(estimator=RandomForestRegressor(random_state=42),
+                           param_grid=param_grid,
+                           cv=3, n_jobs=-1, verbose=2)
+
+grid_search.fit(X_val, y_val)
+
+best_model = grid_search.best_estimator_
+
+# Save the best model
+joblib.dump(best_model, 'best_random_forest_regressor_model.joblib')
 
 # Predict on validation set
-val_predictions = model.predict(X_val)
+val_predictions = best_model.predict(X_val)
 val_results = {
     'actual': y_val,
     'predicted': val_predictions
@@ -101,9 +120,6 @@ val_predictions_df = pd.DataFrame(val_results)
 mse = mean_squared_error(val_predictions_df['actual'], val_predictions_df['predicted'])
 mae = mean_absolute_error(val_predictions_df['actual'], val_predictions_df['predicted'])
 rmse = np.sqrt(mse)
-
-# Save the trained model
-joblib.dump(model, 'random_forest_model.joblib')
 
 print(f'Mean Squared Error (Validation): {mse}')
 print(f'Mean Absolute Error (Validation): {mae}')
